@@ -94,7 +94,7 @@ func findTmpl() (*os.File, error) {
 	}
 
 	for len(path) > 1 {
-		file, err := os.Open(filepath.Join(path, "e7blog.html"))
+		file, err := os.Open(filepath.Join(path, ".template.html"))
 		if err == nil {
 			return file, nil
 		}
