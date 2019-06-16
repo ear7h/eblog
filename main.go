@@ -14,10 +14,14 @@ import (
 
 var ErrTmplNotFound = errors.New("template not found")
 
-var tmplFlag = flag.String("t", "", "tempate file path")
+var noinFlag = flag.Bool("e", false, "generate with no input file")
+var tmplFlag = flag.String("t", "", "template file path")
 var helpFlag = flag.Bool("h", false, "show help")
 
-const usage = "%s\t[-t template] [infile [outfile]]\n%[1]s\t-h\n"
+const usage = `%s	[-t template] [infile [outfile]]
+%[1]s	-e [-t template] [outfile]
+%[1]s	-h
+`
 
 func main() {
 
@@ -49,36 +53,63 @@ func main() {
 	tmpl, err := template.New("template").
 		Funcs(FuncMap).
 		Parse(string(byt))
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	var out io.Writer = os.Stdout
 	var in *File
 
 	args := flag.Args()
-	switch len(args) {
-	case 2:
-		outf, err := os.Open(args[1])
-		if err != nil {
-			log.Fatalln(err)
+	if *noinFlag {
+		switch len(args) {
+		case 1:
+			outf, err := os.OpenFile(args[0],
+				os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0644)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			defer outf.Close()
+			out = outf
+		case 0:
+			break
+		default:
+			log.Printf(usage, os.Args[0])
 		}
-		defer outf.Close()
-		out = outf
-		fallthrough
-	case 1:
-		in, err = NewFile(args[0])
-		if err != nil {
-			log.Fatalln(err)
+	} else {
+		switch len(args) {
+		case 2:
+			outf, err := os.OpenFile(args[1],
+				os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0644)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			defer outf.Close()
+			out = outf
+			fallthrough
+		case 1:
+			in, err = NewFile(args[0])
+			if err != nil {
+				if len(args) == 2 {
+					os.Remove(args[1])
+				}
+				log.Fatalln(err)
+			}
+		case 0:
+			in, err = NewFileReader("stdin", os.Stdin)
+			if err != nil {
+				log.Fatalln(err)
+			}
+		default:
+			log.Printf(usage, os.Args[0])
 		}
-	case 0:
-		in, err = NewFileStdin()
-		if err != nil {
-			log.Fatalln(err)
-		}
-	default:
-		log.Printf(usage, os.Args[0])
 	}
 
 	err = tmpl.Execute(out, in)
 	if err != nil {
+		if len(args) == 2 {
+			os.Remove(args[1])
+		}
 		log.Fatalln(err)
 	}
 }
@@ -90,7 +121,7 @@ func findTmpl() (*os.File, error) {
 	}
 
 	for len(path) > 1 {
-		file, err := os.Open(filepath.Join(path, ".template"))
+		file, err := os.Open(filepath.Join(path, "template"))
 		if err == nil {
 			return file, nil
 		}
