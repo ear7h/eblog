@@ -3,11 +3,15 @@ package main
 import (
 	"bytes"
 	"errors"
+	"path/filepath"
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/rwcarlsen/goexif/exif"
+	"github.com/rwcarlsen/goexif/tiff"
 	"gopkg.in/russross/blackfriday.v2"
 	"gopkg.in/yaml.v2"
 )
@@ -37,20 +41,47 @@ func NewFile(fname string) (*File, error) {
 	return ret, nil
 }
 
+type walkerFunc func(name exif.FieldName, tag *tiff.Tag) error
+
+func (f walkerFunc) Walk(name exif.FieldName, tag *tiff.Tag) error {
+	return f(name, tag)
+}
+
+
 func NewFileReader(name string, r io.Reader) (*File, error) {
 	byt, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	fm := map[string]interface{}{}
+	meta := map[string]interface{}{}
 	var arr [][]byte
-	if bytes.HasPrefix(byt, []byte("---\n")) {
+	if strings.Contains(".png.jpg.tif", filepath.Ext(name)) {
+		// parse exif
+		x, err := exif.Decode(bytes.NewReader(byt))
+		if err != nil {
+			return nil, err
+		}
+
+		f := func(name exif.FieldName, tag *tiff.Tag) error {
+			meta[string(name)] = tag.String()
+			return nil
+		}
+
+		err = x.Walk(walkerFunc(f))
+		if err != nil {
+			return nil, err
+		}
+
+		goto PostMeta
+	} else if bytes.HasPrefix(byt, []byte("---\n")) {
+		// parse front matter
 		arr = bytes.SplitN(byt, []byte("---\n"), 3)
 	} else if bytes.HasPrefix(byt, []byte("===\n")) {
+		// parse front matter
 		arr = bytes.SplitN(byt, []byte("===\n"), 3)
 	} else {
-		goto L
+		goto PostMeta
 	}
 
 	if len(arr) != 3 {
@@ -58,17 +89,18 @@ func NewFileReader(name string, r io.Reader) (*File, error) {
 	}
 
 	byt = arr[2]
-	err = yaml.Unmarshal(arr[1], &fm)
+	err = yaml.Unmarshal(arr[1], &meta)
 	if err != nil {
 		return nil, err
 	}
-L:
+
+PostMeta:
 
 	return &File{
 		Name:  name,
 		Body:  string(byt),
-		Mtime: time.Now(),
-		Fm:    fm,
+		Mtime: time.Now(), // TODO
+		Meta:  meta,
 	}, nil
 }
 
@@ -80,7 +112,7 @@ type File struct {
 	Ctime time.Time
 	Atime time.Time
 	*/
-	Fm map[string]interface{}
+	Meta map[string]interface{}
 }
 
 func (f *File) Md() string {
