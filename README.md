@@ -19,7 +19,7 @@ tmpl    -e [-t template] [outfile]
 ```
 
 In general the program needs 3 files: the template, an input, and an output.
-When run with no arguments, file named `template` with any extension is
+When run with no arguments, file named `template` is
 searched for in all parent directories, and input and output is done
 through stdin and stdout. A user defined template file can be given via
 the `-t` flag.
@@ -27,7 +27,7 @@ the `-t` flag.
 ## Example
 
 This examples generates a site map of a git repository.
-`tmpl.html`
+`template`
 ```html
 <!DOCTYPE html>
 <html>
@@ -35,18 +35,55 @@ This examples generates a site map of a git repository.
   <title>index for {{ sh `pwd` | join "" | base }}</title>
 </head>
 <body>
+  <ul>
   {{ range sh `git ls-files` -}}
-    <a href="{{ . }}">{{ . }}</a> </br>
-  {{ end }}
+    <li><a href="{{ . }}"> {{ . }} </a></li>
+  {{ end -}}
+  </ul>
 </body>
 </html>
 ```
+
+A few things to note here:
+* `sh` runs the `sh -C` command with a string argument and returns and *array*
+  of strings, each string being a line (this makes iterating commands like `ls`
+  simpler)
+* `join ""` joins the strings in the array, making it a single string
+* `base` returns the name of the directory, with other parts of the path
+  removed.
+* `range sh ..` here is an example where sh returning arrays is helpful
 
 Since this template does not take any file as input, make sure to use
 the `-e` flag.
 
 ```bash
 tmpl -e
+```
+
+The output of running the above command on this directory should be
+something like:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>index for tmpl</title>
+</head>
+<body>
+  <ul>
+  <li><a href=".gitignore"> .gitignore </a></li>
+  <li><a href="README.md"> README.md </a></li>
+  <li><a href="file.go"> file.go </a></li>
+  <li><a href="func_map.go"> func_map.go </a></li>
+  <li><a href="go.mod"> go.mod </a></li>
+  <li><a href="go.sum"> go.sum </a></li>
+  <li><a href="log/log.go"> log/log.go </a></li>
+  <li><a href="main.go"> main.go </a></li>
+  <li><a href="test/exif_test.jpg"> test/exif_test.jpg </a></li>
+  <li><a href="test/exif_test.txt.tmpl"> test/exif_test.txt.tmpl </a></li>
+  </ul>
+</body>
+</html>
 ```
 
 ## The File object

@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>index for {{ sh `pwd` | join "" | base }}</title>
+</head>
+<body>
+  <ul>
+  {{ range sh `git ls-files` -}}
+    <li><a href="{{ . }}"> {{ . }} </a></li>
+  {{ end -}}
+  </ul>
+</body>
+</html>
