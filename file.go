@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/rwcarlsen/goexif/exif"
@@ -18,22 +18,32 @@ import (
 
 var ErrBadFrontMatter = errors.New("bad front matter")
 
+
+type fileError struct {
+	fname string
+	err error
+}
+
+func (fe *fileError) Error() string {
+	return fmt.Sprintf("%s: %s", fe.fname, fe.err.Error())
+}
+
 func NewFile(fname string) (*File, error) {
 
 	f, err := os.Open(fname)
 	if err != nil {
-		return nil, err
+		return nil, &fileError{fname, err}
 	}
 	defer f.Close()
 
 	ret, err := NewFileReader(fname, f)
 	if err != nil {
-		return nil, err
+		return nil, &fileError{fname, err}
 	}
 
 	stat, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return nil, &fileError{fname, err}
 	}
 
 	ret.Mtime = stat.ModTime()
@@ -56,7 +66,16 @@ func NewFileReader(name string, r io.Reader) (*File, error) {
 
 	meta := map[string]interface{}{}
 	var arr [][]byte
-	if strings.Contains(".png.jpg.tif", filepath.Ext(name)) {
+
+	// if image
+	switch filepath.Ext(name) {
+	case "png", "jpg", "tif":
+		break
+	default:
+		goto PostExif
+	}
+
+	{
 		// parse exif
 		x, err := exif.Decode(bytes.NewReader(byt))
 		if err != nil {
@@ -74,7 +93,11 @@ func NewFileReader(name string, r io.Reader) (*File, error) {
 		}
 
 		goto PostMeta
-	} else if bytes.HasPrefix(byt, []byte("---\n")) {
+	}
+PostExif:
+
+
+	if bytes.HasPrefix(byt, []byte("---\n")) {
 		// parse front matter
 		arr = bytes.SplitN(byt, []byte("---\n"), 3)
 	} else if bytes.HasPrefix(byt, []byte("===\n")) {
