@@ -50,7 +50,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	tmpl, err := template.New("template").
+	tmpl, err := template.New(*tmplFlag).
 		Funcs(FuncMap).
 		Parse(string(byt))
 	if err != nil {
